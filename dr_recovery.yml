@@ -1,0 +1,29 @@
+---
+- name: DR Recovery - Verificacion de servicios
+  hosts: all
+  become: yes
+  gather_facts: yes
+
+  tasks:
+    - name: Verificar conectividad
+      ping:
+
+    - name: Obtener uso de memoria
+      shell: free -h
+      register: memory_info
+
+    - name: Mostrar memoria
+      debug:
+        msg: "{{ memory_info.stdout }}"
+
+    - name: Verificar espacio en disco
+      shell: df -h /
+      register: disk_info
+
+    - name: Mostrar disco
+      debug:
+        msg: "{{ disk_info.stdout }}"
+
+    - name: Reportar recuperacion exitosa
+      debug:
+        msg: "DR Recovery completado exitosamente en {{ inventory_hostname }}"
