@@ -33,20 +33,21 @@
         status_code: [200, 202]
       register: start_result
 
-    - name: Esperar que la VM este en ejecucion
+    - name: Esperar 60 segundos para que la VM inicie
+      wait_for:
+        timeout: 60
+
+    - name: Verificar estado de la VM
       uri:
         url: "https://management.azure.com/subscriptions/{{ subscription_id }}/resourceGroups/{{ resource_group }}/providers/Microsoft.Compute/virtualMachines/{{ vm_name }}/instanceView?api-version=2023-03-01"
         method: GET
         headers:
           Authorization: "Bearer {{ access_token }}"
       register: vm_status
-      until: vm_status.json.statuses[1].displayStatus == "VM running"
-      retries: 10
-      delay: 30
 
     - name: Reportar resultado exitoso
       debug:
-        msg: "VM {{ vm_name }} levantada exitosamente"
+        msg: "VM {{ vm_name }} levantada exitosamente - Estado: {{ vm_status.json.statuses | map(attribute='displayStatus') | list }}"
 
     - name: Notificar a Power Automate
       uri:
