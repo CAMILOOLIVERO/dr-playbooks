@@ -33,21 +33,26 @@
         status_code: [200, 202]
       register: start_result
 
-    - name: Esperar 60 segundos para que la VM inicie
-      wait_for:
-        timeout: 60
-
-    - name: Verificar estado de la VM
+    - name: Esperar que la VM inicie (timeout 2 minutos)
       uri:
         url: "https://management.azure.com/subscriptions/{{ subscription_id }}/resourceGroups/{{ resource_group }}/providers/Microsoft.Compute/virtualMachines/{{ vm_name }}/instanceView?api-version=2023-03-01"
         method: GET
         headers:
           Authorization: "Bearer {{ access_token }}"
       register: vm_status
+      until: "'VM running' in (vm_status.json.statuses | map(attribute='displayStatus') | list)"
+      retries: 4
+      delay: 30
+      ignore_errors: yes
 
-    - name: Reportar resultado exitoso
+    - name: Evaluar resultado
+      set_fact:
+        dr_status: "{{ 'success' if 'VM running' in (vm_status.json.statuses | map(attribute='displayStatus') | list) else 'failed' }}"
+        dr_mensaje: "{{ 'VM ' + vm_name + ' levantada exitosamente' if 'VM running' in (vm_status.json.statuses | map(attribute='displayStatus') | list) else 'Timeout: VM no levanto en 2 minutos' }}"
+
+    - name: Reportar resultado
       debug:
-        msg: "VM {{ vm_name }} levantada exitosamente - Estado: {{ vm_status.json.statuses | map(attribute='displayStatus') | list }}"
+        msg: "{{ dr_mensaje }}"
 
     - name: Notificar a Power Automate
       uri:
@@ -57,9 +62,12 @@
           Content-Type: "application/json"
         body_format: json
         body:
-          status: "success"
+          status: "{{ dr_status }}"
           vm: "{{ vm_name }}"
-          mensaje: "VM {{ vm_name }} levantada exitosamente"
+          mensaje: "{{ dr_mensaje }}"
           duracion: "{{ ansible_date_time.time }}"
         status_code: [200, 202, 204]
-      ignore_errors: yes
+      register: callback_result
+      retries: 3
+      delay: 10
+      until: callback_result.status in [200, 202, 204]
