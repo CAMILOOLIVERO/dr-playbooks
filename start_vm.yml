@@ -2,7 +2,13 @@
 - name: DR Recovery - Levantar VM caida en Azure
   hosts: localhost
   connection: local
-  gather_facts: no
+  gather_facts: yes
+
+  vars:
+    subscription_id: "1fefe992-e8e2-472d-bb8a-bac89bf7b525"
+    resource_group: "rg-monitoreo"
+    vm_name: "vm-target-dr"
+    callback_url: "https://default95028a14d2f943c0bc7342a4be7c04.92.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/234e03f98e064bc19eed5b1b3daf796f/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=AME72QUsPPNekXE5plbxq1PLdMBIvAUsEZ7WthyT8Zo"
 
   tasks:
     - name: Autenticar con Managed Identity
@@ -19,7 +25,7 @@
 
     - name: Levantar vm-target-dr
       uri:
-        url: "https://management.azure.com/subscriptions/1fefe992-e8e2-472d-bb8a-bac89bf7b525/resourceGroups/rg-monitoreo/providers/Microsoft.Compute/virtualMachines/vm-target-dr/start?api-version=2023-03-01"
+        url: "https://management.azure.com/subscriptions/{{ subscription_id }}/resourceGroups/{{ resource_group }}/providers/Microsoft.Compute/virtualMachines/{{ vm_name }}/start?api-version=2023-03-01"
         method: POST
         headers:
           Authorization: "Bearer {{ access_token }}"
@@ -27,19 +33,32 @@
         status_code: [200, 202]
       register: start_result
 
-    - name: Reportar resultado
-      debug:
-        msg: "VM vm-target-dr iniciada exitosamente"
-
-    - name: Notificar resultado a Power Automate
+    - name: Esperar que la VM este en ejecucion
       uri:
-        url: "https://default95028a14d2f943c0bc7342a4be7c04.92.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/234e03f98e064bc19eed5b1b3daf796f/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=AME72QUsPPNekXE5plbxq1PLdMBIvAUsEZ7WthyT8Zo"
+        url: "https://management.azure.com/subscriptions/{{ subscription_id }}/resourceGroups/{{ resource_group }}/providers/Microsoft.Compute/virtualMachines/{{ vm_name }}/instanceView?api-version=2023-03-01"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ access_token }}"
+      register: vm_status
+      until: vm_status.json.statuses[1].displayStatus == "VM running"
+      retries: 10
+      delay: 30
+
+    - name: Reportar resultado exitoso
+      debug:
+        msg: "VM {{ vm_name }} levantada exitosamente"
+
+    - name: Notificar a Power Automate
+      uri:
+        url: "{{ callback_url }}"
         method: POST
         headers:
           Content-Type: "application/json"
         body_format: json
         body:
           status: "success"
-          vm: "vm-target-dr"
-          mensaje: "VM vm-target-dr levantada exitosamente"
-          duracion: "{{ lookup('pipe', 'date +%H:%M:%S') }}"
+          vm: "{{ vm_name }}"
+          mensaje: "VM {{ vm_name }} levantada exitosamente"
+          duracion: "{{ ansible_date_time.time }}"
+        status_code: [200, 202, 204]
+      ignore_errors: yes
