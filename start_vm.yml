@@ -1,0 +1,32 @@
+---
+- name: DR Recovery - Levantar VM caida en Azure
+  hosts: localhost
+  connection: local
+  gather_facts: no
+
+  tasks:
+    - name: Autenticar con Managed Identity
+      uri:
+        url: "http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=https://management.azure.com/"
+        headers:
+          Metadata: "true"
+        method: GET
+      register: auth_response
+
+    - name: Extraer token
+      set_fact:
+        access_token: "{{ auth_response.json.access_token }}"
+
+    - name: Levantar vm-target-dr
+      uri:
+        url: "https://management.azure.com/subscriptions/1fefe992-e8e2-472d-bb8a-bac89bf7b525/resourceGroups/rg-monitoreo/providers/Microsoft.Compute/virtualMachines/vm-target-dr/start?api-version=2023-03-01"
+        method: POST
+        headers:
+          Authorization: "Bearer {{ access_token }}"
+          Content-Type: "application/json"
+        status_code: [200, 202]
+      register: start_result
+
+    - name: Reportar resultado
+      debug:
+        msg: "VM vm-target-dr iniciada exitosamente"
