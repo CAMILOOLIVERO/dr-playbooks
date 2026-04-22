@@ -30,3 +30,16 @@
     - name: Reportar resultado
       debug:
         msg: "VM vm-target-dr iniciada exitosamente"
+
+    - name: Notificar resultado a Power Automate
+      uri:
+        url: "https://default95028a14d2f943c0bc7342a4be7c04.92.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/234e03f98e064bc19eed5b1b3daf796f/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=AME72QUsPPNekXE5plbxq1PLdMBIvAUsEZ7WthyT8Zo"
+        method: POST
+        headers:
+          Content-Type: "application/json"
+        body_format: json
+        body:
+          status: "success"
+          vm: "vm-target-dr"
+          mensaje: "VM vm-target-dr levantada exitosamente"
+          duracion: "{{ lookup('pipe', 'date +%H:%M:%S') }}"
